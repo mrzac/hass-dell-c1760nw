@@ -11,13 +11,17 @@ from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, LOGGER
 
 @dataclass
 class DellPrinterData:
-    """Structure des données de l'imprimante."""
+    """Structure enrichie des données de l'imprimante."""
     status: str
-    page_counter: int
+    page_counter_total: int
+    page_counter_mono: int
+    page_counter_color: int
     toner_black: int
     toner_cyan: int
     toner_magenta: int
     toner_yellow: int
+    serial_number: str | None
+    paper_tray_status: str
 
 class DellC1760nwDataUpdateCoordinator(DataUpdateCoordinator[DellPrinterData]):
     """Récupère l'ensemble des données de l'imprimante en 1 seule passe réseau."""

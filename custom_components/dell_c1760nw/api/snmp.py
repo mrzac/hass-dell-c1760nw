@@ -6,7 +6,7 @@ from typing import Any
 from .parser import parse_toner_level
 from ..models import DellPrinterData
 
-PRINTER_STATUS_OID = "1.3.6.1.2.1.25.3.5.1.1.1.0"
+PRINTER_STATUS_OID = "1.3.6.1.2.1.25.3.5.1.1.1.1"
 SERIAL_OID = "1.3.6.1.2.1.43.5.1.1.17.1"
 PAGE_COUNT_OID = "1.3.6.1.2.1.43.10.2.1.4.1.1"
 SUPPLIES_ROOT = "1.3.6.1.2.1.43.11.1.1"
@@ -114,6 +114,13 @@ async def async_read_printer(hass: Any, host: str, port: int, community: str) ->
         for row in rows.values():
             description = str(row.get("description", "")).strip().lower()
             if not description:
+                continue
+            # prtMarkerSuppliesType: toner(3). Avoid confusing the waste container
+            # with the four replaceable color cartridges.
+            supply_type = _as_int(row.get("type"))
+            if supply_type not in (None, 3):
+                if supply_type == 4 or "waste" in description or "usagé" in description:
+                    data.waste_toner_status = description
                 continue
             target_attr = next((attr for token, attr in TONER_NAMES.items() if token in description), None)
             if target_attr is None:

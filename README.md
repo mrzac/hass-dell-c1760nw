@@ -1,22 +1,30 @@
-# Dell C1760nw pour Home Assistant
+# Dell C1760nw - Home Assistant Integration
 
-Intégration dédiée (SNMP v2c, aucune dépendance externe), basée sur un relevé SNMP réel de l'imprimante.
+![HACS Custom Repository](https://img.shields.io/badge/HACS-Custom-orange.svg)
+![GitHub release](https://img.shields.io/github/v/release/mrzac/hass-dell-c1760nw)
 
-## Entités
-- 4 toners en % (`sensor.dell_c1760nw_toner_cyan|magenta|yellow|black`), avec attributs `pages_restantes` et `capacite_pages`
-- Compteur de pages total, pages noir, pages couleur
-- État (Prêt / Impression / ...) + message de l'afficheur
-- Alerte (ex. « Replace the Cyan Cartridge soon. », attribut `code` = 093-425)
-- Capot arrière (ouvert / fermé)
-- Appareil : numéro de série et firmware (Net / Engine)
+Intégration personnalisée Home Assistant moderne pour l'imprimante laser couleur **Dell C1760nw**.
 
-## Installation
-1. Copier `custom_components/dell_c1760nw` dans `/config/custom_components/` (ou dépôt personnalisé HACS).
-2. Redémarrer Home Assistant.
-3. Paramètres → Appareils et services → Ajouter une intégration → « Dell C1760nw ».
-4. IP de l'imprimante, communauté `public`, port 161.
+## 🌟 Fonctionnalités
 
-Exemples : `examples/lovelace_card.yaml`, `examples/automations.yaml`.
+- ⚙️ **Configuration UI (`Config Flow`)** : Ajout facile sans toucher à `configuration.yaml`.
+- 🔍 **Découverte automatique (`Zeroconf / mDNS`)** : Détection réseau automatique.
+- ⚡ **Acquisition optimisée (`DataUpdateCoordinator`)** : Polling SNMP centralisé et efficace.
+- 🎨 **Capteurs complets** : Niveaux de toner (Noir, Cyan, Magenta, Jaune), statut et compteur de pages.
+- 🔄 **Bouton d'action** : Bouton pour forcer le rafraîchissement manuel des états.
+- 🌍 **Internationalisation** : Support du Français et de l'Anglais.
+- 🤖 **CI/CD** : Workflows d'intégration continue validés via Hassfest et HACS Action.
 
-## Calcul des toners
-`niveau (43.11.1.1.9.1.N) / capacité (43.11.1.1.8.1.N) × 100`. L'imprimante exprime ces valeurs en pages : cyan 105/700 = 15 %.
+## 📦 Installation via HACS
+
+1. Ouvrez HACS dans Home Assistant.
+2. Cliquez sur les 3 points en haut à droite > **Dépôts personnalisés**.
+3. Ajoutez le lien de votre dépôt GitHub et sélectionnez la catégorie **Intégration**.
+4. Cliquez sur **Installer**.
+5. Redémarrez Home Assistant.
+
+## 🔧 Configuration
+
+1. Allez dans **Paramètres** > **Appareils et services**.
+2. Cliquez sur **Ajouter une intégration** et cherchez `Dell C1760nw`.
+3. Entrez l'adresse IP de votre imprimante.

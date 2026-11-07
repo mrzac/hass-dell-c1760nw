@@ -1,105 +1,115 @@
-"""Sensors for the Dell C1760nw."""
+"""Entités capteurs Dell C1760nw."""
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity, SensorStateClass
+from dataclasses import dataclass
+from typing import Callable
+
+from homeassistant.components.sensor import (
+    SensorEntity,
+    SensorEntityDescription,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE
+from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import COLOR_LABELS, DOMAIN, NO_ALERT, SUPPLY_INDEXES
-from .entity import DellEntity
+from .const import DOMAIN
+from .coordinator import DellC1760nwDataUpdateCoordinator, DellPrinterData
 
+@dataclass
+class DellSensorEntityDescription(SensorEntityDescription):
+    value_fn: Callable[[DellPrinterData], str | int | None] = lambda d: None
+
+SENSOR_DESCRIPTIONS: tuple[DellSensorEntityDescription, ...] = (
+    DellSensorEntityDescription(
+        key="status",
+        name="Statut",
+        icon="mdi:printer",
+        value_fn=lambda d: d.status,
+    ),
+    DellSensorEntityDescription(
+        key="page_counter",
+        name="Compteur de pages",
+        icon="mdi:counter",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: d.page_counter,
+    ),
+    DellSensorEntityDescription(
+        key="toner_black",
+        name="Toner Noir",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:printer-3d-nozzle",
+        value_fn=lambda d: d.toner_black,
+    ),
+    DellSensorEntityDescription(
+        key="toner_cyan",
+        name="Toner Cyan",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:printer-3d-nozzle",
+        value_fn=lambda d: d.toner_cyan,
+    ),
+    DellSensorEntityDescription(
+        key="toner_magenta",
+        name="Toner Magenta",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:printer-3d-nozzle",
+        value_fn=lambda d: d.toner_magenta,
+    ),
+    DellSensorEntityDescription(
+        key="toner_yellow",
+        name="Toner Jaune",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:printer-3d-nozzle",
+        value_fn=lambda d: d.toner_yellow,
+    ),
+)
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
-    c = hass.data[DOMAIN][entry.entry_id]
-    entities: list[SensorEntity] = [TonerSensor(c, entry, col) for col in SUPPLY_INDEXES.values()]
-    entities += [
-        PageSensor(c, entry, "page_count", "Compteur de pages", "page_count"),
-        PageSensor(c, entry, "pages_black", "Pages noir", "pages_black"),
-        PageSensor(c, entry, "pages_color", "Pages couleur", "pages_color"),
-        StatusSensor(c, entry),
-        AlertSensor(c, entry),
-    ]
-    async_add_entities(entities)
+    """Ajoute les capteurs pour cette instance."""
+    coordinator: DellC1760nwDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    async_add_entities(
+        DellPrinterSensor(coordinator, entry, description)
+        for description in SENSOR_DESCRIPTIONS
+    )
 
+class DellPrinterSensor(CoordinatorEntity[DellC1760nwDataUpdateCoordinator], SensorEntity):
+    """Capteur générique rattaché au Device Registry."""
 
-class TonerSensor(DellEntity, SensorEntity):
-    _attr_native_unit_of_measurement = PERCENTAGE
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_icon = "mdi:water"
+    entity_description: DellSensorEntityDescription
 
-    def __init__(self, coordinator, entry, color: str) -> None:
-        super().__init__(coordinator, entry, f"toner_{color}")
-        self._color = color
-        self._attr_name = f"Toner {COLOR_LABELS[color].lower()}"
-
-    @property
-    def native_value(self):
-        return self.coordinator.data["toners"].get(self._color, {}).get("percent")
-
-    @property
-    def extra_state_attributes(self):
-        t = self.coordinator.data["toners"].get(self._color, {})
-        return {
-            "pages_restantes": t.get("pages_left"),
-            "capacite_pages": t.get("capacity"),
-            "description": t.get("description"),
-        }
-
-
-class PageSensor(DellEntity, SensorEntity):
-    _attr_icon = "mdi:counter"
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_native_unit_of_measurement = "pages"
-
-    def __init__(self, coordinator, entry, key: str, name: str, data_key: str) -> None:
-        super().__init__(coordinator, entry, key)
-        self._attr_name = name
-        self._data_key = data_key
+    def __init__(
+        self,
+        coordinator: DellC1760nwDataUpdateCoordinator,
+        entry: ConfigEntry,
+        description: DellSensorEntityDescription,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name="Dell C1760nw",
+            manufacturer="Dell",
+            model="C1760nw Color Laser Printer",
+            configuration_url=f"http://{coordinator.host}",
+        )
 
     @property
-    def native_value(self):
-        return self.coordinator.data.get(self._data_key)
-
-
-class StatusSensor(DellEntity, SensorEntity):
-    _attr_name = "État"
-    _attr_icon = "mdi:printer"
-
-    def __init__(self, coordinator, entry) -> None:
-        super().__init__(coordinator, entry, "status")
-
-    @property
-    def native_value(self):
-        return self.coordinator.data["status"]
-
-    @property
-    def extra_state_attributes(self):
-        d = self.coordinator.data
-        return {"message_afficheur": d["display"], "description_systeme": d["sys_descr"]}
-
-
-class AlertSensor(DellEntity, SensorEntity):
-    _attr_name = "Alerte"
-    _attr_icon = "mdi:alert-circle-outline"
-
-    def __init__(self, coordinator, entry) -> None:
-        super().__init__(coordinator, entry, "alert")
-
-    @property
-    def native_value(self):
-        alerts = self.coordinator.data["alerts"]
-        return alerts[0]["message"][:255] if alerts else NO_ALERT
-
-    @property
-    def extra_state_attributes(self):
-        alerts = self.coordinator.data["alerts"]
-        return {
-            "nombre": len(alerts),
-            "code": alerts[0]["code"] if alerts else None,
-            "gravite": alerts[0]["severity"] if alerts else None,
-            "alertes": alerts,
-        }
+    def native_value(self) -> str | int | None:
+        """Valeur extraite des données centralisées du DataUpdateCoordinator."""
+        if self.coordinator.data is None:
+            return None
+        return self.entity_description.value_fn(self.coordinator.data)

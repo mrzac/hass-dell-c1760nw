@@ -1,0 +1,12 @@
+{
+  "domain": "dell_c1760nw",
+  "name": "Dell C1760nw",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/CHANGE_ME/hass-dell-c1760nw",
+  "issue_tracker": "https://github.com/CHANGE_ME/hass-dell-c1760nw/issues",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "requirements": [],
+  "version": "0.2.0"
+}

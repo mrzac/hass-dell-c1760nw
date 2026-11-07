@@ -1,0 +1,18 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Dell C1760nw",
+        "description": "Adresse IP de l'imprimante et communauté SNMP (v2c).",
+        "data": { "host": "Adresse IP", "community": "Communauté SNMP", "port": "Port" }
+      }
+    },
+    "error": { "cannot_connect": "Impossible de joindre l'imprimante en SNMP." },
+    "abort": { "already_configured": "Cette imprimante est déjà configurée." }
+  },
+  "options": {
+    "step": {
+      "init": { "data": { "scan_interval": "Intervalle d'actualisation (secondes)" } }
+    }
+  }
+}

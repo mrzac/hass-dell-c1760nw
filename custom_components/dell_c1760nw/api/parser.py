@@ -21,7 +21,7 @@ def parse_toner_level(level_raw: object, max_capacity_raw: object = None, unit_r
     except (TypeError, ValueError):
         unit = None
 
-    if unit == 7:
+    if unit == 19:
         return max(0, min(100, level))
 
     try:

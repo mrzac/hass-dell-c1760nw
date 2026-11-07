@@ -5,7 +5,7 @@ from __future__ import annotations
 def parse_toner_level(level_raw: object, max_capacity_raw: object = None, unit_raw: object = None) -> int | None:
     """Retourne un pourcentage uniquement si les données SNMP permettent de le calculer.
 
-    Printer-MIB: l'unité 7 représente un pourcentage. Pour les autres unités,
+    Printer-MIB: l'unité 19 représente un pourcentage. Pour les autres unités,
     une capacité maximale positive est nécessaire pour normaliser la mesure.
     Les valeurs négatives (-1/-2/-3) représentent des états spéciaux, pas un niveau.
     """

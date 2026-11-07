@@ -76,7 +76,6 @@ async def async_read_printer(hass: Any, host: str, port: int, community: str) ->
         data.status = {
             "1": "Autre", "2": "Inconnu", "3": "Prêt",
             "4": "Impression", "5": "Préchauffage",
-            "6": "En arrêt", "7": "En veille",
         }.get(status_code, "Inconnu")
         serial = binds.get(SERIAL_OID)
         if serial is not None:

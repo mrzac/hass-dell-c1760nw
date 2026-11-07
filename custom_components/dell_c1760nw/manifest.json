@@ -6,14 +6,24 @@
   ],
   "config_flow": true,
   "documentation": "https://github.com/mrzac/hass-dell-c1760nw",
+  "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/mrzac/hass-dell-c1760nw/issues",
+  "loggers": [
+    "pysnmp"
+  ],
   "requirements": [
     "pysnmp>=7.1.16"
   ],
+  "version": "0.4.0",
   "zeroconf": [
-    "_printer._tcp.local.",
-    "_ipp._tcp.local."
-  ],
-  "version": "0.3.0"
+    {
+      "type": "_ipp._tcp.local.",
+      "name": "dell*"
+    },
+    {
+      "type": "_printer._tcp.local.",
+      "name": "dell*"
+    }
+  ]
 }

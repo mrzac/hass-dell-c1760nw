@@ -10,7 +10,5 @@ DEFAULT_PORT = 161
 DEFAULT_COMMUNITY = "public"
 
 DEFAULT_SCAN_INTERVAL = timedelta(seconds=60)
-FAST_SCAN_INTERVAL = timedelta(seconds=30)
-SLOW_SCAN_INTERVAL = timedelta(seconds=300)
 
 CONF_SNMP_COMMUNITY = "community"

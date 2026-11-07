@@ -7,7 +7,6 @@ cards:
       · **Alerte :** {{ states('sensor.dell_c1760nw_alerte_actuelle') }}
       **Pages totales :** {{ states('sensor.dell_c1760nw_compteur_de_pages_total') }} 
       (N&B: {{ states('sensor.dell_c1760nw_pages_noir_blanc') }} / Couleur: {{ states('sensor.dell_c1760nw_pages_couleur') }})
-      · **Tambour d'imagerie :** {{ states('sensor.dell_c1760nw_tambour_d_imagerie') }} %
 
   - type: horizontal-stack
     cards:
@@ -20,11 +19,11 @@ cards:
         name: Magenta
         severity: { green: 25, yellow: 15, red: 0 }
       - type: gauge
-        entity: sensor.dell_c1760nw_toner_yellow
+        entity: sensor.dell_c1760nw_toner_jaune
         name: Jaune
         severity: { green: 25, yellow: 15, red: 0 }
       - type: gauge
-        entity: sensor.dell_c1760nw_toner_black
+        entity: sensor.dell_c1760nw_toner_noir
         name: Noir
         severity: { green: 25, yellow: 15, red: 0 }
 

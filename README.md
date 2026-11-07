@@ -4,28 +4,42 @@ Intégration personnalisée pour surveiller l'imprimante laser couleur **Dell C1
 
 ## Fonctionnalités
 
-- Collecte SNMP basée sur la Printer-MIB (RFC 3805), avec découverte des lignes de consommables.
-- Lecture complémentaire des informations de statut et d'alerte depuis l'interface EWS.
-- Mesures de niveau en pourcentage uniquement lorsqu'une valeur numérique réelle et son unité/capacité sont disponibles.
-- États textuels des cartouches exposés séparément des mesures en pourcentage.
-- Compteur de pages, statut de l'imprimante et alertes matérielles lorsqu'ils sont fournis par l'appareil.
-- Disponibilité réseau gérée par le coordinateur Home Assistant : une panne de communication ne transforme pas l'imprimante en état « veille » et ne modifie pas les dernières données valides.
+- Collecte **SNMP v2c** (Printer-MIB, RFC 3805) : statut, consommables, alertes, compteurs.
+- Consommables découverts **par leur description** (« Cartouche cyan », …), jamais par index fixe.
+- Niveaux de toner en % uniquement quand la mesure est réelle (valeur ÷ capacité). Les valeurs spéciales SNMP (-1/-2/-3) ne deviennent jamais un pourcentage.
+- Alerte courante et code d'erreur Dell (ex. `093-425`) lus dans `prtAlertTable`.
+- Bourrage, capot ouvert et bac vide lus dans `hrPrinterDetectedErrorState` (bits standard) et dans les alertes.
+- Compteurs de pages total / noir & blanc / couleur, numéro de série, firmware, adresse MAC.
+- La page EWS (`/status/status.htm`) n'est utilisée que **de secours** si SNMP ne répond pas.
+- Une panne réseau rend les entités indisponibles ; elle ne fabrique pas d'état « veille ».
 
 ## Installation
 
-1. Installer l'intégration via HACS comme dépôt personnalisé de type **Integration**, ou copier `custom_components/dell_c1760nw` dans le dossier `custom_components` de Home Assistant.
+1. Installer via HACS (dépôt personnalisé, type **Integration**) ou copier `custom_components/dell_c1760nw` dans le dossier `custom_components` de Home Assistant.
 2. Redémarrer Home Assistant.
-3. Ajouter **Dell C1760nw** depuis *Paramètres → Appareils et services → Ajouter une intégration*.
-4. Renseigner l'adresse IP, le port SNMP (161 par défaut) et la communauté SNMP.
+3. *Paramètres → Appareils et services → Ajouter une intégration → Dell C1760nw*.
+4. Renseigner l'adresse IP, le port SNMP (161) et la communauté (`public` par défaut).
 
-SNMP doit être activé et accessible sur l'imprimante. Les valeurs non prises en charge par le modèle ou non exposées par son agent SNMP/EWS restent indisponibles.
+SNMP doit être activé sur l'imprimante. La saisie est **testée en SNMP** : un port ou une communauté erronés sont refusés dès la configuration. Le numéro de série sert d'identifiant : si l'IP change (DHCP), l'entrée est mise à jour au lieu d'être dupliquée.
 
-## Toners : mesure et état
+## Entités
 
-Les capteurs `Toner Noir/Cyan/Magenta/Jaune` représentent uniquement une mesure numérique exploitable. Une réponse SNMP spéciale (valeur négative), une capacité absente ou un texte EWS comme « OK » ou « Remplacer bientôt » ne sont **pas** convertis en pourcentage estimé. Les textes EWS sont publiés dans les capteurs distincts `État toner …`.
+Les identifiants suivent le nom de l'appareil, par exemple :
+`sensor.dell_c1760nw_toner_noir`, `…_toner_cyan`, `…_toner_magenta`, `…_toner_jaune`,
+`sensor.dell_c1760nw_statut`, `sensor.dell_c1760nw_alerte_actuelle`,
+`binary_sensor.dell_c1760nw_bourrage_papier`, `button.dell_c1760nw_rafraichir_l_etat`.
 
-La Printer-MIB est interrogée par découverte des entrées de `prtMarkerSuppliesTable`; les index de lignes ne sont pas supposés correspondre à une couleur fixe. La disponibilité des colonnes et la façon dont l'agent Dell les remplit peuvent varier selon le firmware.
+Les entités déjà créées par une ancienne version gardent leur identifiant d'origine (modifiable dans l'interface).
+
+## Ce que ce modèle n'expose pas
+
+Le `snmpwalk` d'une C1760nw ne publie ni tambour ni bac de toner usagé dans `prtMarkerSuppliesTable` : les anciens capteurs « Tambour d'imagerie », « Bac de toner usagé » et « Toner non officiel » ont donc été retirés (ils restaient toujours vides). Le binaire « Bac récepteur toner plein » s'appuie uniquement sur les alertes standard (codes 1107/1109).
 
 ## Développement et tests
 
-Les tests unitaires de normalisation et de parsing EWS se trouvent dans `tests/` et peuvent être exécutés avec `pytest`.
+```bash
+pip install pytest
+pytest
+```
+
+Les tests des modules purs (`api/`, `models`) tournent sans Home Assistant. `tests/test_snmp_data.py` rejoue les valeurs d'un vrai `snmpwalk` de C1760nw.

@@ -1,21 +1,28 @@
 {
   "config": {
+    "flow_title": "Dell C1760nw ({host})",
     "step": {
       "user": {
         "title": "Add your Dell C1760nw printer",
-        "description": "Enter the IP address of the printer.",
+        "description": "SNMP must be enabled on the printer. The connection is tested with these settings.",
         "data": {
-          "host": "IP Address",
-          "port": "SNMP Port",
-          "community": "SNMP Community"
+          "host": "IP address",
+          "port": "SNMP port",
+          "community": "SNMP community"
         }
+      },
+      "zeroconf_confirm": {
+        "title": "Dell C1760nw discovered",
+        "description": "Do you want to add the printer at {host}?"
       }
     },
     "error": {
-      "cannot_connect": "Connection failed. Make sure the printer is powered on and reachable."
+      "cannot_connect": "No SNMP answer. Check the IP address, the SNMP port, the community and that the printer is on."
     },
     "abort": {
-      "already_configured": "This printer is already configured in Home Assistant."
+      "already_configured": "This printer is already configured.",
+      "already_in_progress": "Setup of this printer is already in progress.",
+      "not_supported": "This device does not look like a Dell C1760nw."
     }
   }
 }

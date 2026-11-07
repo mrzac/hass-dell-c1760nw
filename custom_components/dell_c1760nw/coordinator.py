@@ -2,85 +2,92 @@
 from __future__ import annotations
 
 import asyncio
+
 import aiohttp
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api.ews import parse_ews_html
-from .api.snmp import async_read_printer
-from .const import (
-    CONF_SNMP_COMMUNITY, DEFAULT_COMMUNITY, DEFAULT_PORT,
-    DEFAULT_SCAN_INTERVAL, DOMAIN, LOGGER,
-)
+from .api.snmp import DellSnmpClient
+from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, LOGGER
 from .models import DellPrinterData
 
-# Compatibilité avec les imports historiques déjà utilisés par d'autres plateformes.
-__all__ = ["DellPrinterData", "DellC1760nwDataUpdateCoordinator", "parse_toner_level", "parse_status_text_to_level"]
-
-
-def parse_toner_level(level_raw: object, max_cap_raw: object = None) -> int | None:
-    """Normalise une mesure réelle ; les valeurs d'état SNMP négatives restent inconnues."""
-    from .api.parser import parse_toner_level as _parse
-    return _parse(level_raw, max_cap_raw)
-
-
-def parse_status_text_to_level(status_text: str) -> None:
-    """Les états textuels ne constituent pas une mesure de niveau."""
-    return None
+UPDATE_TIMEOUT = 20
+EWS_TIMEOUT = 4
 
 
 class DellC1760nwDataUpdateCoordinator(DataUpdateCoordinator[DellPrinterData]):
-    """Interroge SNMP puis EWS sans dégrader les dernières données valides."""
+    """Interroge SNMP ; l'EWS ne sert que de secours si SNMP ne répond pas."""
+
+    config_entry: ConfigEntry
 
     def __init__(
         self,
         hass: HomeAssistant,
-        host: str,
-        port: int = DEFAULT_PORT,
-        community: str = DEFAULT_COMMUNITY,
+        entry: ConfigEntry,
+        client: DellSnmpClient,
     ) -> None:
         super().__init__(
-            hass, LOGGER, name=DOMAIN, update_interval=DEFAULT_SCAN_INTERVAL
+            hass,
+            LOGGER,
+            config_entry=entry,
+            name=DOMAIN,
+            update_interval=DEFAULT_SCAN_INTERVAL,
         )
-        self.host = host
-        self.port = port
-        self.community = community
+        self.client = client
+        entry.async_on_unload(client.close)
+
+    @property
+    def host(self) -> str:
+        """Adresse de l'imprimante."""
+        return self.client.host
+
+    async def _async_setup(self) -> None:
+        """Charge pysnmp hors de la boucle d'événements."""
+        try:
+            await self.client.async_setup(self.hass)
+        except ImportError as err:
+            raise ConfigEntryError(f"pysnmp indisponible : {err}") from err
 
     async def _async_update_data(self) -> DellPrinterData:
         """Retourne une nouvelle photographie des données ou signale l'indisponibilité."""
         try:
-            async with asyncio.timeout(12):
-                data = await async_read_printer(
-                    self.hass, self.host, self.port, self.community
-                )
-                if data is None:
-                    data = DellPrinterData(ip_address=self.host)
+            async with asyncio.timeout(UPDATE_TIMEOUT):
+                data = await self.client.async_fetch()
+                if data is not None:
+                    return data
 
-                ews_ok = await self._fetch_http_ews(data)
-                if data.status == "Inconnu" and not ews_ok:
-                    raise UpdateFailed(f"Aucune réponse SNMP ou EWS de {self.host}")
-
-                return data
+                LOGGER.debug("Pas de réponse SNMP de %s, essai EWS", self.host)
+                fallback = DellPrinterData(ip_address=self.host)
+                if await self._fetch_http_ews(fallback):
+                    return fallback
+                raise UpdateFailed(f"Aucune réponse SNMP ou EWS de {self.host}")
         except UpdateFailed:
             raise
         except (TimeoutError, aiohttp.ClientError, OSError) as err:
-            raise UpdateFailed(f"Imprimante {self.host} inaccessible: {err}") from err
+            raise UpdateFailed(f"Imprimante {self.host} inaccessible : {err}") from err
         except Exception as err:
             LOGGER.exception("Erreur inattendue lors de la lecture de %s", self.host)
-            raise UpdateFailed(f"Erreur de lecture de l'imprimante: {err}") from err
+            raise UpdateFailed(f"Erreur de lecture de l'imprimante : {err}") from err
 
     async def _fetch_http_ews(self, data: DellPrinterData) -> bool:
-        """Récupère les informations complémentaires depuis la page EWS."""
+        """Lit la page EWS ; True si des informations ont été reconnues."""
         session = async_get_clientsession(self.hass)
         url = f"http://{self.host}/status/status.htm"
         try:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=4)) as response:
+            async with session.get(
+                url, timeout=aiohttp.ClientTimeout(total=EWS_TIMEOUT)
+            ) as response:
                 if response.status != 200:
                     return False
-                parse_ews_html(await response.text(), data)
-                return True
+                return parse_ews_html(await response.text(), data)
         except (TimeoutError, aiohttp.ClientError, OSError):
             LOGGER.debug("EWS indisponible sur %s", self.host)
             return False
+
+
+type DellConfigEntry = ConfigEntry[DellC1760nwDataUpdateCoordinator]

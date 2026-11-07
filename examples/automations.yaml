@@ -3,8 +3,8 @@
   trigger:
     - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_cyan,    below: 20, id: "20" }
     - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_magenta, below: 20, id: "20" }
-    - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_yellow,  below: 20, id: "20" }
-    - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_black,   below: 20, id: "20" }
+    - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_jaune,  below: 20, id: "20" }
+    - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_noir,   below: 20, id: "20" }
   action:
     - service: notify.notify
       data:

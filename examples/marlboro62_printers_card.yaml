@@ -4,7 +4,7 @@ title: "Dell C1760nw"
 entity: sensor.dell_c1760nw_statut
 web_url: http://192.168.1.XX
 cartridges:
-  - entity: sensor.dell_c1760nw_toner_black
+  - entity: sensor.dell_c1760nw_toner_noir
     name: Noir
     color: "#000000"
   - entity: sensor.dell_c1760nw_toner_cyan
@@ -13,7 +13,7 @@ cartridges:
   - entity: sensor.dell_c1760nw_toner_magenta
     name: Magenta
     color: "#ff00ff"
-  - entity: sensor.dell_c1760nw_toner_yellow
+  - entity: sensor.dell_c1760nw_toner_jaune
     name: Jaune
     color: "#ffd700"
 counters:

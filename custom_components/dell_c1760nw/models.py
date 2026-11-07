@@ -5,8 +5,20 @@ from dataclasses import dataclass
 
 
 @dataclass
+class PrinterAlert:
+    """Ligne de prtAlertTable (Printer-MIB)."""
+
+    severity: int | None = None
+    group: int | None = None
+    group_index: int | None = None
+    code: int | None = None
+    text: str = ""
+    vendor_code: str | None = None
+
+
+@dataclass
 class DellPrinterData:
-    """État observé de l'imprimante ; les niveaux restent None s'ils ne sont pas mesurés."""
+    """État observé de l'imprimante ; les valeurs restent None si non mesurées."""
 
     status: str = "Inconnu"
     printer_alert: str = "Aucune"
@@ -22,13 +34,10 @@ class DellPrinterData:
     toner_status_cyan: str | None = None
     toner_status_magenta: str | None = None
     toner_status_yellow: str | None = None
-    drum_life: int | None = None
-    waste_toner_status: str | None = None
     waste_toner_full: bool = False
     paper_tray_empty: bool = False
     paper_jam: bool = False
     cover_open: bool = False
-    non_dell_toner: bool = False
     firmware_version: str | None = None
     mac_address: str | None = None
     serial_number: str | None = None

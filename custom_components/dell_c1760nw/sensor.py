@@ -1,30 +1,28 @@
 """Entités capteurs pour la Dell C1760nw compatibles avec la carte Marlboro62/printers."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
-from .coordinator import DellC1760nwDataUpdateCoordinator, DellPrinterData
+from .coordinator import DellConfigEntry
+from .entity import DellPrinterEntity
+from .models import DellPrinterData
 
 
-@dataclass
+@dataclass(frozen=True, kw_only=True)
 class DellSensorEntityDescription(SensorEntityDescription):
     """Description étendue avec fonction d'extraction de valeur."""
 
-    value_fn: Callable[[DellPrinterData], str | int | None] = lambda d: None
+    value_fn: Callable[[DellPrinterData], str | int | None]
 
 
 SENSOR_DESCRIPTIONS: tuple[DellSensorEntityDescription, ...] = (
@@ -102,23 +100,6 @@ SENSOR_DESCRIPTIONS: tuple[DellSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC, icon="mdi:information-outline",
         value_fn=lambda d: d.toner_status_yellow,
     ),
-    # --- Tambour & Consommables ---
-    DellSensorEntityDescription(
-        key="drum_life",
-        name="Tambour d'imagerie",
-        native_unit_of_measurement=PERCENTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        icon="mdi:rotate-right",
-        value_fn=lambda d: d.drum_life,
-    ),
-    DellSensorEntityDescription(
-        key="waste_toner_status",
-        name="Bac de toner usagé",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        icon="mdi:delete-restore",
-        value_fn=lambda d: d.waste_toner_status,
-    ),
     # --- Compteurs de Pages ---
     DellSensorEntityDescription(
         key="page_counter_total",
@@ -171,45 +152,28 @@ SENSOR_DESCRIPTIONS: tuple[DellSensorEntityDescription, ...] = (
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: DellConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Instancie les entités capteurs."""
-    coordinator: DellC1760nwDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     async_add_entities(
         DellPrinterSensor(coordinator, entry, description)
         for description in SENSOR_DESCRIPTIONS
     )
 
 
-class DellPrinterSensor(
-    CoordinatorEntity[DellC1760nwDataUpdateCoordinator], SensorEntity
-):
+class DellPrinterSensor(DellPrinterEntity, SensorEntity):
     """Représentation d'un capteur Dell C1760nw."""
 
     entity_description: DellSensorEntityDescription
 
-    def __init__(
-        self,
-        coordinator: DellC1760nwDataUpdateCoordinator,
-        entry: ConfigEntry,
-        description: DellSensorEntityDescription,
-    ) -> None:
+    def __init__(self, coordinator, entry, description) -> None:
         """Initialisation de l'entité."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, entry, description.key)
         self.entity_description = description
-        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name="Dell C1760nw",
-            manufacturer="Dell",
-            model="C1760nw Color Laser Printer",
-            configuration_url=f"http://{coordinator.host}",
-        )
 
     @property
     def native_value(self) -> str | int | None:
         """Récupère la valeur actualisée."""
-        if self.coordinator.data is None:
-            return None
         return self.entity_description.value_fn(self.coordinator.data)

@@ -2,44 +2,62 @@
 from __future__ import annotations
 
 from typing import Any
+
 import voluptuous as vol
 
-from homeassistant import config_entries
-from homeassistant.components.zeroconf import ZeroconfServiceInfo
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PORT
-from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import CONF_SNMP_COMMUNITY, DEFAULT_COMMUNITY, DEFAULT_PORT, DOMAIN
+try:  # Home Assistant >= 2025.2
+    from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
+except ImportError:  # versions antérieures
+    from homeassistant.components.zeroconf import ZeroconfServiceInfo
+
+from .api.snmp import DellSnmpClient, PrinterIdentity
+from .const import CONF_SNMP_COMMUNITY, DEFAULT_COMMUNITY, DEFAULT_PORT, DOMAIN, LOGGER
 
 
-class DellC1760nwConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Gère le formulaire d'ajout et la validation réseau."""
+class DellC1760nwConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Gère le formulaire d'ajout et la validation SNMP réelle."""
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        self._discovered_host: str | None = None
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Étape de configuration manuelle."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
-            await self.async_set_unique_id(host)
-            self._abort_if_unique_id_configured()
+            port = user_input.get(CONF_PORT, DEFAULT_PORT)
+            community = user_input.get(CONF_SNMP_COMMUNITY, DEFAULT_COMMUNITY)
+            self._async_abort_entries_match({CONF_HOST: host})
 
-            if await self._test_connection(host):
-                user_input[CONF_HOST] = host
+            identity = await self._async_identify(host, port, community)
+            if identity is None:
+                errors["base"] = "cannot_connect"
+            else:
+                # Le numéro de série reste stable si l'IP change (DHCP).
+                await self.async_set_unique_id(identity.serial or host)
+                self._abort_if_unique_id_configured(updates={CONF_HOST: host})
                 return self.async_create_entry(
                     title=f"Dell C1760nw ({host})",
-                    data=user_input,
+                    data={
+                        CONF_HOST: host,
+                        CONF_PORT: port,
+                        CONF_SNMP_COMMUNITY: community,
+                    },
                 )
-            errors["base"] = "cannot_connect"
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_HOST): str,
+                vol.Required(
+                    CONF_HOST, default=self._discovered_host or vol.UNDEFINED
+                ): str,
                 vol.Optional(CONF_PORT, default=DEFAULT_PORT): vol.All(
                     int, vol.Range(min=1, max=65535)
                 ),
@@ -50,29 +68,50 @@ class DellC1760nwConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
-    ) -> FlowResult:
-        """Découverte réseau mDNS/Zeroconf."""
+    ) -> ConfigFlowResult:
+        """Découverte mDNS : n'accepte que les C1760nw et demande confirmation."""
         host = discovery_info.host
+        haystack = " ".join(
+            [
+                discovery_info.name,
+                discovery_info.hostname,
+                *(str(value) for value in discovery_info.properties.values()),
+            ]
+        ).lower()
+        if "c1760" not in haystack:
+            return self.async_abort(reason="not_supported")
+
+        self._async_abort_entries_match({CONF_HOST: host})
         await self.async_set_unique_id(host)
         self._abort_if_unique_id_configured()
+
+        self._discovered_host = host
         self.context["title_placeholders"] = {"host": host}
-        return await self.async_step_user(
-            {
-                CONF_HOST: host,
-                CONF_PORT: DEFAULT_PORT,
-                CONF_SNMP_COMMUNITY: DEFAULT_COMMUNITY,
-            }
+        return await self.async_step_zeroconf_confirm()
+
+    async def async_step_zeroconf_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Confirmation de l'imprimante découverte."""
+        if user_input is not None:
+            return await self.async_step_user(
+                {CONF_HOST: self._discovered_host, CONF_PORT: DEFAULT_PORT}
+            )
+        return self.async_show_form(
+            step_id="zeroconf_confirm",
+            description_placeholders={"host": self._discovered_host or ""},
         )
 
-    async def _test_connection(self, host: str) -> bool:
-        """Vérifie que l'hôte répond en HTTP ; une erreur réseau échoue réellement."""
+    async def _async_identify(
+        self, host: str, port: int, community: str
+    ) -> PrinterIdentity | None:
+        """Interroge réellement l'imprimante en SNMP (hôte, port et communauté)."""
+        client = DellSnmpClient(host, port, community)
         try:
-            session = async_get_clientsession(self.hass)
-            async with session.get(
-                f"http://{host}/", timeout=3, allow_redirects=True
-            ) as response:
-                return response.status < 500
-        except (TimeoutError, OSError):
-            return False
-        except Exception:
-            return False
+            await client.async_setup(self.hass)
+            return await client.async_identify()
+        except Exception:  # noqa: BLE001 - toute erreur = échec de connexion
+            LOGGER.debug("Validation SNMP de %s impossible", host, exc_info=True)
+            return None
+        finally:
+            client.close()

@@ -1,21 +1,28 @@
 {
   "config": {
+    "flow_title": "Dell C1760nw ({host})",
     "step": {
       "user": {
-        "title": "Configuration Dell C1760nw",
-        "description": "Saisissez les param\u00e8tres de connexion de l'imprimante.",
+        "title": "Ajouter votre imprimante Dell C1760nw",
+        "description": "SNMP doit être activé sur l'imprimante. La connexion est testée avec ces paramètres.",
         "data": {
           "host": "Adresse IP",
           "port": "Port SNMP",
-          "community": "Communaut\u00e9 SNMP"
+          "community": "Communauté SNMP"
         }
+      },
+      "zeroconf_confirm": {
+        "title": "Dell C1760nw détectée",
+        "description": "Voulez-vous ajouter l'imprimante située à l'adresse {host} ?"
       }
     },
     "error": {
-      "cannot_connect": "\u00c9chec de connexion. V\u00e9rifiez l'adresse IP et l'alimentation de l'appareil."
+      "cannot_connect": "Aucune réponse SNMP. Vérifiez l'adresse IP, le port SNMP, la communauté et que l'imprimante est allumée."
     },
     "abort": {
-      "already_configured": "Cette imprimante Dell C1760nw est d\u00e9j\u00e0 int\u00e9gr\u00e9e."
+      "already_configured": "Cette imprimante est déjà configurée.",
+      "already_in_progress": "La configuration de cette imprimante est déjà en cours.",
+      "not_supported": "Cet appareil ne semble pas être une Dell C1760nw."
     }
   }
 }

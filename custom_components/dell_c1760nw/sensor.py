@@ -81,6 +81,27 @@ SENSOR_DESCRIPTIONS: tuple[DellSensorEntityDescription, ...] = (
         icon="mdi:printer-3d-nozzle",
         value_fn=lambda d: d.toner_yellow,
     ),
+    # --- États textuels des consommables (distincts des mesures en %) ---
+    DellSensorEntityDescription(
+        key="toner_status_black", name="État toner noir",
+        entity_category=EntityCategory.DIAGNOSTIC, icon="mdi:information-outline",
+        value_fn=lambda d: d.toner_status_black,
+    ),
+    DellSensorEntityDescription(
+        key="toner_status_cyan", name="État toner cyan",
+        entity_category=EntityCategory.DIAGNOSTIC, icon="mdi:information-outline",
+        value_fn=lambda d: d.toner_status_cyan,
+    ),
+    DellSensorEntityDescription(
+        key="toner_status_magenta", name="État toner magenta",
+        entity_category=EntityCategory.DIAGNOSTIC, icon="mdi:information-outline",
+        value_fn=lambda d: d.toner_status_magenta,
+    ),
+    DellSensorEntityDescription(
+        key="toner_status_yellow", name="État toner jaune",
+        entity_category=EntityCategory.DIAGNOSTIC, icon="mdi:information-outline",
+        value_fn=lambda d: d.toner_status_yellow,
+    ),
     # --- Tambour & Consommables ---
     DellSensorEntityDescription(
         key="drum_life",

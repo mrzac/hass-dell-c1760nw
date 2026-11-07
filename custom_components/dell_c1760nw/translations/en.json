@@ -6,7 +6,8 @@
         "description": "Enter the IP address of the printer.",
         "data": {
           "host": "IP Address",
-          "port": "SNMP Port"
+          "port": "SNMP Port",
+          "community": "SNMP Community"
         }
       }
     },

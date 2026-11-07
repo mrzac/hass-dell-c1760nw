@@ -2,19 +2,20 @@
   "config": {
     "step": {
       "user": {
-        "title": "Ajouter votre imprimante Dell C1760nw",
-        "description": "Indiquez l'adresse IP réseau de l'imprimante.",
+        "title": "Configuration Dell C1760nw",
+        "description": "Saisissez les param\u00e8tres de connexion de l'imprimante.",
         "data": {
           "host": "Adresse IP",
-          "port": "Port SNMP"
+          "port": "Port SNMP (par d\u00e9faut 161)",
+          "community": "Communaut\u00e9 SNMP"
         }
       }
     },
     "error": {
-      "cannot_connect": "Échec de connexion. Vérifiez que l'imprimante est allumée et sur le même réseau."
+      "cannot_connect": "Impossible de se connecter \u00e0 l'imprimante. V\u00e9rifiez qu'elle est sous tension."
     },
     "abort": {
-      "already_configured": "Cette imprimante est déjà enregistrée dans Home Assistant."
+      "already_configured": "L'imprimante est d\u00e9j\u00e0 configur\u00e9e."
     }
   }
 }

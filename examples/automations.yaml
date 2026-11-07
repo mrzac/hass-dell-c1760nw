@@ -1,46 +1,12 @@
-# Alertes toner : 20 % / 10 % / 5 %.
-# numeric_state ne se déclenche qu'au franchissement du seuil : pas de répétition
-# à chaque actualisation SNMP. Remplacez notify.mobile_app_VOTRE_TELEPHONE.
-- alias: "Dell C1760nw - alerte toner"
+- alias: "Dell C1760nw - Alerte toner faible"
   mode: queued
   trigger:
     - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_cyan,    below: 20, id: "20" }
-    - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_cyan,    below: 10, id: "10" }
-    - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_cyan,    below: 5,  id: "5" }
     - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_magenta, below: 20, id: "20" }
-    - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_magenta, below: 10, id: "10" }
-    - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_magenta, below: 5,  id: "5" }
     - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_yellow,  below: 20, id: "20" }
-    - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_yellow,  below: 10, id: "10" }
-    - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_yellow,  below: 5,  id: "5" }
     - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_black,   below: 20, id: "20" }
-    - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_black,   below: 10, id: "10" }
-    - { platform: numeric_state, entity_id: sensor.dell_c1760nw_toner_black,   below: 5,  id: "5" }
   action:
-    - service: notify.mobile_app_VOTRE_TELEPHONE
+    - service: notify.notify
       data:
-        title: >
-          {% if trigger.id == '5' %}🔴 Toner presque vide
-          {% elif trigger.id == '10' %}🟠 Toner critique
-          {% else %}🟡 Toner faible{% endif %}
-        message: >
-          {{ trigger.to_state.name }} : {{ trigger.to_state.state }} %
-          (seuil {{ trigger.id }} %)
-
-# Alerte imprimante (bourrage, capot, toner à remplacer...) avec le code Dell.
-- alias: "Dell C1760nw - alerte imprimante"
-  mode: single
-  trigger:
-    - platform: state
-      entity_id: sensor.dell_c1760nw_alerte
-  condition:
-    - condition: template
-      value_template: >
-        {{ trigger.to_state.state not in ['Aucune', 'unavailable', 'unknown'] }}
-  action:
-    - service: notify.mobile_app_VOTRE_TELEPHONE
-      data:
-        title: "🖨️ Dell C1760nw"
-        message: >
-          {{ trigger.to_state.state }}
-          {% if trigger.to_state.attributes.code %}(code {{ trigger.to_state.attributes.code }}){% endif %}
+        title: "🖨️ Niveau de toner faible"
+        message: "{{ trigger.to_state.name }} est à {{ trigger.to_state.state }} %."

@@ -1,29 +1,38 @@
-# Carte Lovelace : Dell C1760nw
 type: vertical-stack
 cards:
   - type: markdown
     content: |
       ## 🖨️ Dell C1760nw
-      **État :** {{ states('sensor.dell_c1760nw_etat') }}
-      · **Alerte :** {{ states('sensor.dell_c1760nw_alerte') }}
-      **Pages :** {{ states('sensor.dell_c1760nw_compteur_de_pages') }}
-      (noir {{ states('sensor.dell_c1760nw_pages_noir') }} / couleur {{ states('sensor.dell_c1760nw_pages_couleur') }})
-      · **Capot arrière :** {{ 'ouvert ⚠️' if is_state('binary_sensor.dell_c1760nw_capot_arriere','on') else 'fermé' }}
+      **État :** {{ states('sensor.dell_c1760nw_statut') }} 
+      · **Alerte :** {{ states('sensor.dell_c1760nw_alerte_actuelle') }}
+      **Pages totales :** {{ states('sensor.dell_c1760nw_compteur_de_pages_total') }} 
+      (N&B: {{ states('sensor.dell_c1760nw_pages_noir_blanc') }} / Couleur: {{ states('sensor.dell_c1760nw_pages_couleur') }})
+      · **Tambour d'imagerie :** {{ states('sensor.dell_c1760nw_tambour_d_imagerie') }} %
+
   - type: horizontal-stack
     cards:
       - type: gauge
         entity: sensor.dell_c1760nw_toner_cyan
         name: Cyan
-        severity: { green: 21, yellow: 10, red: 0 }
+        severity: { green: 25, yellow: 15, red: 0 }
       - type: gauge
         entity: sensor.dell_c1760nw_toner_magenta
         name: Magenta
-        severity: { green: 21, yellow: 10, red: 0 }
+        severity: { green: 25, yellow: 15, red: 0 }
       - type: gauge
         entity: sensor.dell_c1760nw_toner_yellow
         name: Jaune
-        severity: { green: 21, yellow: 10, red: 0 }
+        severity: { green: 25, yellow: 15, red: 0 }
       - type: gauge
         entity: sensor.dell_c1760nw_toner_black
         name: Noir
-        severity: { green: 21, yellow: 10, red: 0 }
+        severity: { green: 25, yellow: 15, red: 0 }
+
+  - type: entities
+    title: Diagnostics & Matériel
+    entities:
+      - entity: binary_sensor.dell_c1760nw_bourrage_papier
+      - entity: binary_sensor.dell_c1760nw_capot_ouvert
+      - entity: binary_sensor.dell_c1760nw_bac_a_papier_vide
+      - entity: binary_sensor.dell_c1760nw_bac_recepteur_toner_plein
+      - entity: button.dell_c1760nw_rafraichir_l_etat

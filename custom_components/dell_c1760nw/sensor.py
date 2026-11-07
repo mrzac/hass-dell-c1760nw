@@ -1,4 +1,4 @@
-"""Entités capteurs (Sensors) pour la Dell C1760nw."""
+"""Entités capteurs pour la Dell C1760nw compatibles avec la carte Marlboro62/printers."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -41,7 +41,14 @@ SENSOR_DESCRIPTIONS: tuple[DellSensorEntityDescription, ...] = (
         icon="mdi:alert-circle-outline",
         value_fn=lambda d: d.printer_alert,
     ),
-    # --- Toners ---
+    DellSensorEntityDescription(
+        key="alert_code",
+        name="Code d'erreur",
+        icon="mdi:numeric",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: d.alert_code,
+    ),
+    # --- Toners (Nommés de manière standard pour la détection Marlboro62/printers) ---
     DellSensorEntityDescription(
         key="toner_black",
         name="Toner Noir",

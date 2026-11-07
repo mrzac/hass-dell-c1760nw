@@ -1,4 +1,4 @@
-"""Coordinateur centralisé d'acquisition de données pour Dell C1760nw."""
+"""Coordinateur centralisé d'acquisition de données réelles pour Dell C1760nw."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -22,10 +22,11 @@ from .const import (
 
 @dataclass
 class DellPrinterData:
-    """Structure des données de l'imprimante Dell C1760nw."""
+    """Structure des données réelles de l'imprimante Dell C1760nw."""
 
     status: str = "Prêt"
     printer_alert: str = "Aucune"
+    alert_code: str | None = None
     page_counter_total: int | None = None
     page_counter_mono: int | None = None
     page_counter_color: int | None = None
@@ -75,8 +76,20 @@ def parse_toner_level(level_raw: int | str | None, max_cap_raw: int | str | None
     return max(0, min(100, pct))
 
 
+def parse_status_text_to_level(status_text: str) -> int | None:
+    """Convertit les états textuels EWS Dell C1760nw (ex: 'Remplacer bientôt', 'OK') en pourcentage estimé."""
+    txt = status_text.lower()
+    if "remplacer bientôt" in txt or "replace soon" in txt:
+        return 15
+    elif "remplacer" in txt or "replace" in txt or "vide" in txt or "empty" in txt:
+        return 0
+    elif "ok" in txt or "normal" in txt:
+        return 75
+    return None
+
+
 class DellC1760nwDataUpdateCoordinator(DataUpdateCoordinator[DellPrinterData]):
-    """Récupère l'ensemble des données de l'imprimante via SNMP avec fallback HTTP EWS."""
+    """Récupère l'ensemble des données réelles via SNMP avec fallback HTTP EWS."""
 
     def __init__(
         self,
@@ -106,7 +119,6 @@ class DellC1760nwDataUpdateCoordinator(DataUpdateCoordinator[DellPrinterData]):
                 self._consecutive_failures = 0
                 self.last_known_data = data
 
-                # Intervalle dynamique selon l'activité de l'imprimante
                 if data.status.lower() in ("printing", "impression"):
                     self.update_interval = FAST_SCAN_INTERVAL
                 elif data.status.lower() in ("sleep", "veille", "standby"):
@@ -123,7 +135,6 @@ class DellC1760nwDataUpdateCoordinator(DataUpdateCoordinator[DellPrinterData]):
                 err,
                 self._consecutive_failures,
             )
-            # Maintien des dernières données connues lors des veilles temporaires
             if self.last_known_data is not None and self._consecutive_failures < 5:
                 self.last_known_data.status = "Veille"
                 return self.last_known_data
@@ -138,12 +149,11 @@ class DellC1760nwDataUpdateCoordinator(DataUpdateCoordinator[DellPrinterData]):
         """Récupération hybride des données SNMP et HTTP EWS."""
         data = DellPrinterData(ip_address=self.host)
 
-        # 1. Tentative d'interrogation SNMP
+        # 1. Tentative SNMP
         snmp_success = await self._fetch_snmp(data)
 
-        # 2. Fallback HTTP EWS si SNMP non disponible ou incomplet
-        if not snmp_success or data.toner_cyan is None or data.toner_black is None:
-            await self._fetch_http_ews(data)
+        # 2. Fallback / Complément HTTP EWS
+        await self._fetch_http_ews(data)
 
         return data
 
@@ -160,7 +170,7 @@ class DellC1760nwDataUpdateCoordinator(DataUpdateCoordinator[DellPrinterData]):
                 getCmd,
             )
         except ImportError:
-            LOGGER.debug("pysnmp non installé, bascule sur le scraping HTTP")
+            LOGGER.debug("pysnmp non installé, utilisation du scraping HTTP EWS")
             return False
 
         try:
@@ -194,7 +204,7 @@ class DellC1760nwDataUpdateCoordinator(DataUpdateCoordinator[DellPrinterData]):
             return False
 
     async def _fetch_http_ews(self, data: DellPrinterData) -> None:
-        """Extraction HTML via le serveur web d'administration de la Dell C1760nw."""
+        """Scrappe la page web /status/status.htm de la Dell C1760nw."""
         session = async_get_clientsession(self.hass)
         url = f"http://{self.host}/status/status.htm"
         try:
@@ -203,58 +213,54 @@ class DellC1760nwDataUpdateCoordinator(DataUpdateCoordinator[DellPrinterData]):
                     html = await response.text()
                     self._parse_ews_html(html, data)
         except Exception as ex:
-            LOGGER.debug("Erreur de connexion EWS HTTP: %s", ex)
+            LOGGER.debug("Erreur HTTP EWS: %s", ex)
 
     def _parse_ews_html(self, html: str, data: DellPrinterData) -> None:
-        """Parse le contenu HTML et applique les règles métier Dell C1760nw."""
-        if data.status == "Inconnu":
-            data.status = "Prêt"
+        """Parse précisément le HTML de la page web Dell C1760nw (niveaux réels et messages de code d'erreur)."""
+        html_clean = re.sub(r'\s+', ' ', html)
 
-        # Extraction par regex robuste sur la page EWS
-        mapping = [
-            ("black", "toner_black"),
-            ("cyan", "toner_cyan"),
-            ("magenta", "toner_magenta"),
-            ("yellow", "toner_yellow"),
-        ]
-        for color, field_name in mapping:
-            if getattr(data, field_name) is None:
-                match = re.search(
-                    rf"{color}\s*(?:toner|cartridge|cartouche)?\s*[:=]?\s*(\d{{1,3}})\s*%",
-                    html,
-                    re.IGNORECASE,
-                )
-                if match:
-                    setattr(data, field_name, parse_toner_level(match.group(1)))
+        # Parsing des cartouches depuis le texte HTML (ex: 'Cartouche cyan Niveau : Remplacer bientôt')
+        colors_map = {
+            'cyan': 'toner_cyan',
+            'magenta': 'toner_magenta',
+            'jaune': 'toner_yellow',
+            'yellow': 'toner_yellow',
+            'noir': 'toner_black',
+            'black': 'toner_black',
+        }
 
-        # Valeurs par défaut sécurisées en cas de première initialisation
-        if data.toner_black is None:
-            data.toner_black = 80
-        if data.toner_cyan is None:
-            data.toner_cyan = 55
-        if data.toner_magenta is None:
-            data.toner_magenta = 40
-        if data.toner_yellow is None:
-            data.toner_yellow = 90
-        if data.page_counter_total is None:
-            data.page_counter_total = 1250
-        if data.page_counter_mono is None:
-            data.page_counter_mono = 800
-        if data.page_counter_color is None:
-            data.page_counter_color = 450
-        if data.drum_life is None:
-            data.drum_life = 92
+        for color_name, attr_name in colors_map.items():
+            # Cherche motif '%', sinon motif textuel 'Niveau : XXX'
+            pattern_pct = rf"cartouche\s+{color_name}\s+niveau\s*:\s*(\d{{1,3}})\s*%"
+            match_pct = re.search(pattern_pct, html_clean, re.IGNORECASE)
+            if match_pct:
+                setattr(data, attr_name, int(match_pct.group(1)))
+            else:
+                pattern_txt = rf"cartouche\s+{color_name}\s+niveau\s*:\s*([a-zàâäéèêëîïôöùûüç\s]+)"
+                match_txt = re.search(pattern_txt, html_clean, re.IGNORECASE)
+                if match_txt:
+                    status_str = match_txt.group(1).strip()
+                    lvl = parse_status_text_to_level(status_str)
+                    if lvl is not None:
+                        setattr(data, attr_name, lvl)
 
-        # Détection des alertes d'état matériel
-        html_lower = html.lower()
-        if "paper jam" in html_lower or "bourrage" in html_lower:
+        # Extraction des alertes spécifiques (ex: 'Remplacer la cartouche de toner cyan bientôt.:093-425')
+        alert_match = re.search(r"remplacer la cartouche de toner ([a-z]+) bientôt\.?\s*:\s*(\d{3}-\d{3})", html_clean, re.IGNORECASE)
+        if alert_match:
+            color_alert = alert_match.group(1)
+            code = alert_match.group(2)
+            data.printer_alert = f"Remplacer cartouche {color_alert} bientôt"
+            data.alert_code = code
+
+        # Extraction du compteur de pages si présent dans EWS
+        counter_match = re.search(r"(?:compteur de pages|total page count)\s*:\s*(\d+)", html_clean, re.IGNORECASE)
+        if counter_match:
+            data.page_counter_total = int(counter_match.group(1))
+
+        # Statuts matériels
+        if "bourrage" in html_clean.lower() or "paper jam" in html_clean.lower():
             data.paper_jam = True
             data.printer_alert = "Bourrage papier"
-        if "cover open" in html_lower or "capot ouvert" in html_lower or "porte ouverte" in html_lower:
+        if "capot ouvert" in html_clean.lower() or "porte ouverte" in html_clean.lower() or "cover open" in html_clean.lower():
             data.cover_open = True
             data.printer_alert = "Capot ouvert"
-        if "paper empty" in html_lower or "bac vide" in html_lower:
-            data.paper_tray_empty = True
-            data.printer_alert = "Bac à papier vide"
-        if "non-dell" in html_lower or "toner non Dell" in html_lower:
-            data.non_dell_toner = True

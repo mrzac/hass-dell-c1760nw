@@ -1,0 +1,22 @@
+# Configuration compatible avec la carte Marlboro62/printers (ou ha-printer-card)
+type: custom:printer-card
+title: "Dell C1760nw"
+entity: sensor.dell_c1760nw_statut
+web_url: http://192.168.1.XX
+cartridges:
+  - entity: sensor.dell_c1760nw_toner_black
+    name: Noir
+    color: "#000000"
+  - entity: sensor.dell_c1760nw_toner_cyan
+    name: Cyan
+    color: "#00bfff"
+  - entity: sensor.dell_c1760nw_toner_magenta
+    name: Magenta
+    color: "#ff00ff"
+  - entity: sensor.dell_c1760nw_toner_yellow
+    name: Jaune
+    color: "#ffd700"
+counters:
+  - sensor.dell_c1760nw_compteur_de_pages_total
+  - sensor.dell_c1760nw_pages_noir_blanc
+  - sensor.dell_c1760nw_pages_couleur

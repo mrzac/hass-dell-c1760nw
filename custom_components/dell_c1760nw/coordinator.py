@@ -152,7 +152,7 @@ class DellC1760nwDataUpdateCoordinator(DataUpdateCoordinator[DellPrinterData]):
         # 1. Tentative SNMP
         snmp_success = await self._fetch_snmp(data)
 
-        # 2. Fallback / Complément HTTP EWS
+        # 2. Fallback / Complément HTTP EWS (pour alertes textuelles ou codes d'erreur)
         await self._fetch_http_ews(data)
 
         return data
@@ -178,25 +178,61 @@ class DellC1760nwDataUpdateCoordinator(DataUpdateCoordinator[DellPrinterData]):
             target = UdpTransportTarget((self.host, self.port), timeout=2, retries=1)
             auth = CommunityData(self.community, mpModel=0)
 
+            # Requête SNMP combinée : statut, N° série, compteur et toners C/M/Y/K
             errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
                 engine,
                 auth,
                 target,
                 ContextData(),
-                ObjectType(ObjectIdentity("1.3.6.1.2.1.25.3.5.1.1.1")),
-                ObjectType(ObjectIdentity("1.3.6.1.2.1.43.5.1.1.17.1")),
-                ObjectType(ObjectIdentity("1.3.6.1.2.1.43.10.2.1.4.1.1")),
+                ObjectType(ObjectIdentity("1.3.6.1.2.1.25.3.5.1.1.1")),       # Statut
+                ObjectType(ObjectIdentity("1.3.6.1.2.1.43.5.1.1.17.1")),    # N° Série
+                ObjectType(ObjectIdentity("1.3.6.1.2.1.43.10.2.1.4.1.1")),  # Compteur Total
+                ObjectType(ObjectIdentity("1.3.6.1.2.1.43.11.1.1.8.1.1")),  # Cyan Max
+                ObjectType(ObjectIdentity("1.3.6.1.2.1.43.11.1.1.9.1.1")),  # Cyan Niveau
+                ObjectType(ObjectIdentity("1.3.6.1.2.1.43.11.1.1.8.1.2")),  # Magenta Max
+                ObjectType(ObjectIdentity("1.3.6.1.2.1.43.11.1.1.9.1.2")),  # Magenta Niveau
+                ObjectType(ObjectIdentity("1.3.6.1.2.1.43.11.1.1.8.1.3")),  # Jaune Max
+                ObjectType(ObjectIdentity("1.3.6.1.2.1.43.11.1.1.9.1.3")),  # Jaune Niveau
+                ObjectType(ObjectIdentity("1.3.6.1.2.1.43.11.1.1.8.1.4")),  # Noir Max
+                ObjectType(ObjectIdentity("1.3.6.1.2.1.43.11.1.1.9.1.4")),  # Noir Niveau
             )
 
             if not errorIndication and not errorStatus:
-                status_val = str(varBinds[0][1])
+                binds = {str(vb[0]): vb[1] for vb in varBinds}
+
+                # Statut & N° Série
+                status_val = str(binds.get("1.3.6.1.2.1.25.3.5.1.1.1", "3"))
                 status_map = {"1": "Autre", "2": "Inconnu", "3": "Prêt", "4": "Impression", "5": "Préchauffage"}
                 data.status = status_map.get(status_val, "Prêt")
-                data.serial_number = str(varBinds[1][1]) if len(varBinds) > 1 else None
+
+                sn_val = binds.get("1.3.6.1.2.1.43.5.1.1.17.1")
+                if sn_val:
+                    data.serial_number = str(sn_val)
+
+                # Compteur total
                 try:
-                    data.page_counter_total = int(varBinds[2][1])
+                    data.page_counter_total = int(binds.get("1.3.6.1.2.1.43.10.2.1.4.1.1"))
                 except (ValueError, TypeError):
                     pass
+
+                # Calcul dynamique des 4 toners d'après SNMP
+                data.toner_cyan = parse_toner_level(
+                    binds.get("1.3.6.1.2.1.43.11.1.1.9.1.1"),
+                    binds.get("1.3.6.1.2.1.43.11.1.1.8.1.1"),
+                )
+                data.toner_magenta = parse_toner_level(
+                    binds.get("1.3.6.1.2.1.43.11.1.1.9.1.2"),
+                    binds.get("1.3.6.1.2.1.43.11.1.1.8.1.2"),
+                )
+                data.toner_yellow = parse_toner_level(
+                    binds.get("1.3.6.1.2.1.43.11.1.1.9.1.3"),
+                    binds.get("1.3.6.1.2.1.43.11.1.1.8.1.3"),
+                )
+                data.toner_black = parse_toner_level(
+                    binds.get("1.3.6.1.2.1.43.11.1.1.9.1.4"),
+                    binds.get("1.3.6.1.2.1.43.11.1.1.8.1.4"),
+                )
+
                 return True
             return False
         except Exception as ex:
@@ -216,36 +252,40 @@ class DellC1760nwDataUpdateCoordinator(DataUpdateCoordinator[DellPrinterData]):
             LOGGER.debug("Erreur HTTP EWS: %s", ex)
 
     def _parse_ews_html(self, html: str, data: DellPrinterData) -> None:
-        """Parse précisément le HTML de la page web Dell C1760nw (niveaux réels et messages de code d'erreur)."""
-        html_clean = re.sub(r'\s+', ' ', html)
+        """Parse précisément le HTML de la page web Dell C1760nw pour compléter les alertes et codes d'erreur."""
+        html_clean = re.sub(r"\s+", " ", html)
 
-        # Parsing des cartouches depuis le texte HTML (ex: 'Cartouche cyan Niveau : Remplacer bientôt')
+        # Complète le niveau via HTML uniquement si SNMP n'a pas pu le récupérer
         colors_map = {
-            'cyan': 'toner_cyan',
-            'magenta': 'toner_magenta',
-            'jaune': 'toner_yellow',
-            'yellow': 'toner_yellow',
-            'noir': 'toner_black',
-            'black': 'toner_black',
+            "cyan": "toner_cyan",
+            "magenta": "toner_magenta",
+            "jaune": "toner_yellow",
+            "yellow": "toner_yellow",
+            "noir": "toner_black",
+            "black": "toner_black",
         }
 
         for color_name, attr_name in colors_map.items():
-            # Cherche motif '%', sinon motif textuel 'Niveau : XXX'
-            pattern_pct = rf"cartouche\s+{color_name}\s+niveau\s*:\s*(\d{{1,3}})\s*%"
-            match_pct = re.search(pattern_pct, html_clean, re.IGNORECASE)
-            if match_pct:
-                setattr(data, attr_name, int(match_pct.group(1)))
-            else:
-                pattern_txt = rf"cartouche\s+{color_name}\s+niveau\s*:\s*([a-zàâäéèêëîïôöùûüç\s]+)"
-                match_txt = re.search(pattern_txt, html_clean, re.IGNORECASE)
-                if match_txt:
-                    status_str = match_txt.group(1).strip()
-                    lvl = parse_status_text_to_level(status_str)
-                    if lvl is not None:
-                        setattr(data, attr_name, lvl)
+            if getattr(data, attr_name) is None:
+                pattern_pct = rf"cartouche\s+{color_name}\s+niveau\s*:\s*(\d{{1,3}})\s*%"
+                match_pct = re.search(pattern_pct, html_clean, re.IGNORECASE)
+                if match_pct:
+                    setattr(data, attr_name, int(match_pct.group(1)))
+                else:
+                    pattern_txt = rf"cartouche\s+{color_name}\s+niveau\s*:\s*([a-zàâäéèêëîïôöùûüç\s]+)"
+                    match_txt = re.search(pattern_txt, html_clean, re.IGNORECASE)
+                    if match_txt:
+                        status_str = match_txt.group(1).strip()
+                        lvl = parse_status_text_to_level(status_str)
+                        if lvl is not None:
+                            setattr(data, attr_name, lvl)
 
         # Extraction des alertes spécifiques (ex: 'Remplacer la cartouche de toner cyan bientôt.:093-425')
-        alert_match = re.search(r"remplacer la cartouche de toner ([a-z]+) bientôt\.?\s*:\s*(\d{3}-\d{3})", html_clean, re.IGNORECASE)
+        alert_match = re.search(
+            r"remplacer la cartouche de toner ([a-z]+) bientôt\.?\s*:\s*(\d{3}-\d{3})",
+            html_clean,
+            re.IGNORECASE,
+        )
         if alert_match:
             color_alert = alert_match.group(1)
             code = alert_match.group(2)
@@ -253,14 +293,20 @@ class DellC1760nwDataUpdateCoordinator(DataUpdateCoordinator[DellPrinterData]):
             data.alert_code = code
 
         # Extraction du compteur de pages si présent dans EWS
-        counter_match = re.search(r"(?:compteur de pages|total page count)\s*:\s*(\d+)", html_clean, re.IGNORECASE)
-        if counter_match:
+        counter_match = re.search(
+            r"(?:compteur de pages|total page count)\s*:\s*(\d+)", html_clean, re.IGNORECASE
+        )
+        if counter_match and data.page_counter_total is None:
             data.page_counter_total = int(counter_match.group(1))
 
         # Statuts matériels
         if "bourrage" in html_clean.lower() or "paper jam" in html_clean.lower():
             data.paper_jam = True
             data.printer_alert = "Bourrage papier"
-        if "capot ouvert" in html_clean.lower() or "porte ouverte" in html_clean.lower() or "cover open" in html_clean.lower():
+        if (
+            "capot ouvert" in html_clean.lower()
+            or "porte ouverte" in html_clean.lower()
+            or "cover open" in html_clean.lower()
+        ):
             data.cover_open = True
             data.printer_alert = "Capot ouvert"

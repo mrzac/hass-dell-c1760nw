@@ -1,6 +1,6 @@
 """Normalisation des valeurs SNMP de la Dell C1760nw.
 
-Fonctions pures (sans Home Assistant ni pysnmp) : testables telles quelles.
+Fonctions pures (sans Home Assistant) : testables telles quelles.
 """
 from __future__ import annotations
 
@@ -62,18 +62,11 @@ def to_int(value: Any) -> int | None:
 
 
 def to_octets(value: Any) -> bytes | None:
-    """Octets bruts d'une valeur (bytes, str ou OctetString pysnmp)."""
+    """Octets bruts d'une valeur SNMP (bytes ou str)."""
     if value is None:
         return None
     if isinstance(value, (bytes, bytearray)):
         return bytes(value)
-    for name in ("asOctets", "as_octets"):
-        func = getattr(value, name, None)
-        if callable(func):
-            try:
-                return bytes(func())
-            except Exception:  # noqa: BLE001 - valeur exotique, on abandonne
-                return None
     if isinstance(value, str):
         return value.encode("utf-8")
     return None

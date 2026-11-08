@@ -108,10 +108,7 @@ class DellC1760nwConfigFlow(ConfigFlow, domain=DOMAIN):
         """Interroge réellement l'imprimante en SNMP (hôte, port et communauté)."""
         client = DellSnmpClient(host, port, community)
         try:
-            await client.async_setup(self.hass)
             return await client.async_identify()
         except Exception:  # noqa: BLE001 - toute erreur = échec de connexion
             LOGGER.debug("Validation SNMP de %s impossible", host, exc_info=True)
             return None
-        finally:
-            client.close()

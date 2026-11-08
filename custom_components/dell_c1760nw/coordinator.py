@@ -7,7 +7,6 @@ import aiohttp
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -39,19 +38,11 @@ class DellC1760nwDataUpdateCoordinator(DataUpdateCoordinator[DellPrinterData]):
             update_interval=DEFAULT_SCAN_INTERVAL,
         )
         self.client = client
-        entry.async_on_unload(client.close)
 
     @property
     def host(self) -> str:
         """Adresse de l'imprimante."""
         return self.client.host
-
-    async def _async_setup(self) -> None:
-        """Charge pysnmp hors de la boucle d'événements."""
-        try:
-            await self.client.async_setup(self.hass)
-        except ImportError as err:
-            raise ConfigEntryError(f"pysnmp indisponible : {err}") from err
 
     async def _async_update_data(self) -> DellPrinterData:
         """Retourne une nouvelle photographie des données ou signale l'indisponibilité."""

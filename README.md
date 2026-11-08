@@ -5,6 +5,7 @@ Intégration personnalisée pour surveiller l'imprimante laser couleur **Dell C1
 ## Fonctionnalités
 
 - Collecte **SNMP v2c** (Printer-MIB, RFC 3805) : statut, consommables, alertes, compteurs.
+- **Aucune dépendance Python** : le client SNMP (GET/GETBULK en UDP) est intégré. Cela évite les conflits avec les versions de `pysnmp`/`pyasn1` imposées par Home Assistant.
 - Consommables découverts **par leur description** (« Cartouche cyan », …), jamais par index fixe.
 - Niveaux de toner en % uniquement quand la mesure est réelle (valeur ÷ capacité). Les valeurs spéciales SNMP (-1/-2/-3) ne deviennent jamais un pourcentage.
 - Alerte courante et code d'erreur Dell (ex. `093-425`) lus dans `prtAlertTable`.
@@ -42,4 +43,8 @@ pip install pytest
 pytest
 ```
 
-Les tests des modules purs (`api/`, `models`) tournent sans Home Assistant. `tests/test_snmp_data.py` rejoue les valeurs d'un vrai `snmpwalk` de C1760nw.
+Les tests des modules purs (`api/`, `models`) tournent sans Home Assistant.
+
+- `tests/test_ber.py` : codec comparé à des paquets capturés avec un vrai `snmpget` (net-snmp).
+- `tests/test_snmp_client.py` : transport UDP, retries, timeouts et client complet contre un faux agent qui rejoue les valeurs d'un vrai `snmpwalk` de C1760nw.
+- `tests/test_snmp_data.py` : interprétation des valeurs (toners, alertes, compteurs).

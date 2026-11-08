@@ -31,5 +31,5 @@ async def async_setup_entry(hass: HomeAssistant, entry: DellConfigEntry) -> bool
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: DellConfigEntry) -> bool:
-    """Décharge proprement les entités (le moteur SNMP est fermé via on_unload)."""
+    """Décharge proprement les entités."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
